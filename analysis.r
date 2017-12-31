@@ -1,10 +1,7 @@
 require(methods)
 require("quantmod")
 
-print("Hello Friend")
-
 # setup
-# TODO: get dir executing script
 dir <- getwd()
 invisible(Sys.setlocale("LC_MESSAGES", "C"))
 invisible(Sys.setlocale("LC_TIME", "C"))
@@ -16,75 +13,51 @@ analysis <- function(code) {
 
     # transform name to download data from google finance api
     stock_code <- paste("IDX", code, sep=":")
+    ihsg_code <- paste("IDX", "COMPOSITE", sep=":")
     print(stock_code)
 
     # get ohlc data
     today <- Sys.Date()
-    last_year <- today - 360
+    last_year <- today - 365
     stock_data <- na.approx(getSymbols(stock_code, from=last_year, to=today, auto.assign=FALSE, src="google"))
+    ihsg_data <- na.approx(getSymbols(ihsg_code, from=last_year, to=today, auto.assign=FALSE, src="google"))
 
     # charting
     svg_file = paste("figs/", code, ".svg", sep="")
     svg(svg_file, height=9, width=20)
     chartSeries(stock_data,
                 theme="white",
-                TA="addBBands(n=10);addVo();addRSI(n=2);
+                TA="addBBands();addVo();addMACD();addCMF(n=5);addRSI(n=2);addROC(n=5);
                 addSAR();addSMA(n=100, c='blue');addSMA(n=5);
-                addATR(5);addMACD();")
+                addZigZag(change=5);")
     dev.off()
 
-    # temporary data
-    temp.close <- Cl(stock_data)
-    temp.close_three <- last(Cl(stock_data), 3)
-    temp.low_three <- last(Lo(stock_data), 3)
-    temp.rsi_two <- RSI(price=temp.close, 2)
-    temp.ma_five <- SMA(temp.close, 5)
-    temp.ma_hundred <- SMA(temp.close, 100)
-    temp.atr_five <- ATR(stock_data, 5)
+    # stock
+    stock.close <- coredata(last(Cl(stock_data)))
+    stock.daily <- last(dailyReturn(Cl(stock_data)))
+    stock.weekly <- last(weeklyReturn(Cl(stock_data)))
+    stock.monthly <- last(monthlyReturn(Cl(stock_data)))
+    stock.yearly <- last(annualReturn(Cl(stock_data)))
 
-    # last close data
-    result.close <- coredata(last(temp.close))
-
-    # last two period rsi
-    result.rsi <- last(temp.rsi_two)
-
-    # last atr five period
-    result.atr <- coredata(last(temp.atr_five$atr))
-
-    # percentage atr (volatility)
-    result.volatility <- result.atr / result.close
-
-    # buy low next day
-    result.buy_low <- result.close - 0.5 * result.atr
-
-    # is close above ma 100
-    result.is_above_ma_100 <- result.close > last(temp.ma_hundred)
-
-    # is close below ma 5
-    result.is_below_ma_5 <- result.close < last(temp.ma_five)
-
-    # decresing low
-    result.decreasing_low <- all(diff(coredata(temp.low_three)) < 0)
-
-    # decresing close
-    result.decreasing_close <- all(diff(coredata(temp.close_three)) < 0)
-
-    # is rsi below 10 (oversold, time to buy?)
-    result.is_rsi_below <- result.rsi < 10
-
+    # ihsg
+    ihsg.close <- coredata(last(Cl(ihsg_data)))
+    ihsg.daily <- last(dailyReturn(Cl(ihsg_data)))
+    ihsg.weekly <- last(weeklyReturn(Cl(ihsg_data)))
+    ihsg.monthly <- last(monthlyReturn(Cl(ihsg_data)))
+    ihsg.yearly <- last(annualReturn(Cl(ihsg_data)))
 
     # result
     result <- c(
-                close=result.close,
-                rsi=result.rsi,
-                atr=result.atr,
-                volatility=result.volatility,
-                buy_low=result.buy_low,
-                is_above_ma_100=result.is_above_ma_100,
-                is_below_ma_5=result.is_below_ma_5,
-                decreasing_low=result.decreasing_low,
-                decreasing_close=result.decreasing_close,
-                is_rsi_below=result.is_rsi_below
+                stock.close=stock.close,
+                stock.daily=stock.daily,
+                stock.weekly=stock.weekly,
+                stock.monthly=stock.monthly,
+                stock.yearly=stock.yearly,
+                ihsg.close=ihsg.close,
+                ihsg.daily=ihsg.daily,
+                ihsg.weekly=ihsg.weekly,
+                ihsg.monthly=ihsg.monthly,
+                ihsg.yearly=ihsg.yearly
                 )
     return(result)
 }
@@ -92,16 +65,21 @@ analysis <- function(code) {
 
 data <- sapply(df$code, FUN=analysis)
 
-df$close <- data["close",]
-df$rsi <- data["rsi",]
-df$atr <- data["atr",]
-df$volatility <- data["volatility",]
-df$buy_low <- data["buy_low",]
-df$is_above_ma_100 <- data["is_above_ma_100",]
-df$is_below_ma_5 <- data["is_below_ma_5",]
-df$decreasing_low <- data["decreasing_low",]
-df$decreasing_close <- data["decreasing_close",]
-df$is_rsi_below <- data["is_rsi_below",]
+df$stock.close <- data["stock.close",]
+df$stock.daily <- data["stock.daily",]
+df$stock.weekly <- data["stock.weekly",]
+df$stock.monthly <- data["stock.monthly",]
+df$stock.yearly <- data["stock.yearly",]
+df$ihsg.close <- data["ihsg.close",]
+df$ihsg.daily <- data["ihsg.daily",]
+df$ihsg.weekly <- data["ihsg.weekly",]
+df$ihsg.monthly <- data["ihsg.monthly",]
+df$ihsg.yearly <- data["ihsg.yearly",]
+
+# fixed precision
+numbs2format <- df[, (sapply(df, function(x) isTRUE(sum(x %% 1) > 0)))]
+other.columns <- df[, (sapply(df, function(x) !isTRUE(sum(x %% 1) > 0)))]
+df <- cbind(other.columns, format(numbs2format, digits=3, nsmall=3))
 
 # output file
 output_file.sore <- "output/analisis.csv"
